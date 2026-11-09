@@ -3,61 +3,204 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>レンタルサロン yanagi | ご予約</title>
+<title>レンタルサロン yanagi｜予約カレンダー</title>
 <style>
 * { box-sizing: border-box; }
+
 body {
   margin: 0;
-  background: #f7f5ef;
+  background: #f8f7f3;
   color: #333;
-  font-family: sans-serif;
+  font-family: Arial, sans-serif;
 }
+
 header {
-  background: #526b56;
+  background: #506b59;
   color: white;
   text-align: center;
-  padding: 35px 15px;
+  padding: 28px 15px;
 }
-header h1 { margin: 0; font-size: 27px; }
-header p { margin-bottom: 0; }
+
+header h1 {
+  margin: 0;
+  font-size: 25px;
+}
+
+header p {
+  margin-bottom: 0;
+  font-size: 14px;
+}
+
 main {
-  max-width: 560px;
-  margin: 30px auto;
+  max-width: 650px;
+  margin: 25px auto;
   padding: 25px;
   background: white;
-  border-radius: 15px;
+  border-radius: 12px;
 }
-h2 { color: #526b56; font-size: 20px; }
-label { display: block; margin-top: 20px; }
-input, select, button {
-  width: 100%;
-  padding: 13px;
-  margin-top: 8px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 16px;
-}
-.price {
-  margin-top: 25px;
-  padding: 20px;
-  background: #f1f5ef;
+
+h2 {
   text-align: center;
-  border-radius: 10px;
+  font-size: 22px;
 }
-.price strong {
-  font-size: 30px;
-  color: #526b56;
+
+.month-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 25px 0;
 }
-button {
-  background: #526b56;
-  color: white;
+
+.month-nav button {
+  background: none;
   border: none;
-  margin-top: 25px;
+  color: #238bd0;
+  font-size: 28px;
   cursor: pointer;
 }
-.note { font-size: 12px; color: #777; }
+
+#monthTitle {
+  font-size: 21px;
+  font-weight: bold;
+}
+
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+  text-align: center;
+}
+
+.weekday {
+  padding: 10px 0;
+  font-weight: bold;
+}
+
+.weekday:first-child { color: red; }
+.weekday:nth-child(7) { color: #238bd0; }
+
+.day {
+  min-height: 70px;
+  padding: 8px 2px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  background: white;
+}
+
+.day:hover {
+  background: #eef6fc;
+}
+
+.day.selected {
+  background: #dff0ff;
+  border-color: #238bd0;
+}
+
+.day.disabled {
+  color: #bbb;
+  cursor: not-allowed;
+}
+
+.day .symbol {
+  display: block;
+  margin-top: 5px;
+  color: #238bd0;
+  font-size: 23px;
+}
+
+.day.disabled .symbol {
+  color: #aaa;
+}
+
+.section {
+  margin-top: 35px;
+}
+
+.section h3 {
+  font-size: 17px;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+select {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+.legend {
+  margin-top: 30px;
+  padding: 15px;
+  background: #f5f7f5;
+  border-radius: 8px;
+  line-height: 2;
+}
+
+.legend span {
+  color: #238bd0;
+  font-weight: bold;
+}
+
+.summary {
+  margin-top: 30px;
+  padding: 20px;
+  background: #eef3ee;
+  border-radius: 10px;
+}
+
+.price {
+  font-size: 28px;
+  color: #506b59;
+  font-weight: bold;
+}
+
+.reserve-btn {
+  width: 100%;
+  padding: 17px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 7px;
+  background: #506b59;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.notice {
+  font-size: 13px;
+  color: #777;
+  line-height: 1.7;
+}
+
+@media(max-width: 600px) {
+  main {
+    margin: 10px;
+    padding: 15px;
+  }
+
+  .day {
+    min-height: 65px;
+  }
+
+  .time-row {
+    gap: 5px;
+  }
+
+  select {
+    padding: 10px 3px;
+    font-size: 14px;
+  }
+}
 </style>
 </head>
+
 <body>
 
 <header>
@@ -66,113 +209,235 @@ button {
 </header>
 
 <main>
-  <h2>ご予約フォーム</h2>
-  <p>OPEN記念価格：1時間 500円</p>
 
-  <label>ご利用日
-    <input type="date" id="date">
-  </label>
+<h2>日時を選ぶ</h2>
 
-  <label>開始時間
-    <select id="start"></select>
-  </label>
+<p style="text-align:center;">
+  OPEN記念価格：1時間500円
+</p>
 
-  <label>ご利用時間
-    <select id="duration"></select>
-  </label>
+<div class="month-nav">
+  <button onclick="changeMonth(-1)">‹</button>
+  <div id="monthTitle"></div>
+  <button onclick="changeMonth(1)">›</button>
+</div>
 
-  <div class="price">
-    お支払い予定金額<br>
-    <strong id="total">500円</strong>
+<div class="calendar" id="calendar"></div>
+
+<div class="section">
+  <h3>利用時間を選ぶ</h3>
+
+  <div class="time-row">
+    <select id="startTime"></select>
+    <span>→</span>
+    <select id="endTime"></select>
   </div>
 
-  <label>お名前
-    <input type="text" id="name" autocomplete="name">
-  </label>
-
-  <label>メールアドレス
-    <input type="email" id="email" autocomplete="email">
-  </label>
-
-  <button type="button" onclick="preview()">
-    予約内容を確認する
-  </button>
-
-  <p class="note">
-    ※現在は予約ページの試作段階です。
-    予約確定・オンライン決済はまだできません。
+  <p class="notice">
+    ※30分単位でご利用いただけます。
   </p>
+</div>
+
+<div class="legend">
+  <strong>空き状況</strong><br>
+  <span>○</span>：選択可能<br>
+  <span>－</span>：選択不可
+  <p class="notice">
+    ※現在は試作版です。実際の予約状況は反映されていません。
+  </p>
+</div>
+
+<div class="summary">
+  <div id="selectedDate">利用日を選択してください</div>
+  <div id="selectedTime"></div>
+  <div class="price" id="totalPrice">500円</div>
+</div>
+
+<button class="reserve-btn" onclick="confirmReservation()">
+  予約内容を確認する
+</button>
+
+<p class="notice">
+  ※現在は試作段階です。予約確定・決済はできません。
+</p>
+
 </main>
 
 <script>
-const start = document.getElementById("start");
-const duration = document.getElementById("duration");
-const total = document.getElementById("total");
-const date = document.getElementById("date");
+const calendar = document.getElementById("calendar");
+const monthTitle = document.getElementById("monthTitle");
+const startTime = document.getElementById("startTime");
+const endTime = document.getElementById("endTime");
 
-const today = new Date();
-const yyyy = today.getFullYear();
-const mm = String(today.getMonth() + 1).padStart(2, "0");
-const dd = String(today.getDate()).padStart(2, "0");
-date.min = `${yyyy}-${mm}-${dd}`;
+let currentDate = new Date();
+currentDate.setDate(1);
 
-for (let h = 0; h < 24; h++) {
-  for (let m of [0, 30]) {
-    const time =
-      String(h).padStart(2, "0") + ":" +
-      String(m).padStart(2, "0");
-    start.add(new Option(time, time));
+let selectedDate = null;
+
+function formatDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function renderCalendar() {
+  calendar.innerHTML = "";
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  monthTitle.textContent = `${year}年${month + 1}月`;
+
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+
+  weekdays.forEach(day => {
+    const div = document.createElement("div");
+    div.className = "weekday";
+    div.textContent = day;
+    calendar.appendChild(div);
+  });
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 0; i < firstDay; i++) {
+    calendar.appendChild(document.createElement("div"));
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    const dateString = formatDate(date);
+
+    const button = document.createElement("button");
+    button.className = "day";
+
+    const disabled = date < today;
+
+    if (disabled) {
+      button.classList.add("disabled");
+      button.disabled = true;
+    }
+
+    if (selectedDate === dateString) {
+      button.classList.add("selected");
+    }
+
+    button.innerHTML = `
+      ${day}
+      <span class="symbol">${disabled ? "－" : "○"}</span>
+    `;
+
+    button.onclick = () => {
+      selectedDate = dateString;
+      renderCalendar();
+      updateSummary();
+    };
+
+    calendar.appendChild(button);
   }
 }
 
-for (let i = 1; i <= 48; i++) {
-  const minutes = i * 30;
-  const hours = minutes / 60;
-  duration.add(new Option(hours + "時間", minutes));
+function changeMonth(amount) {
+  currentDate.setMonth(currentDate.getMonth() + amount);
+  renderCalendar();
 }
 
-duration.value = "60";
+function createTimeOptions() {
+  for (let h = 0; h < 24; h++) {
+    for (let m of [0, 30]) {
+      const time =
+        String(h).padStart(2, "0") + ":" +
+        String(m).padStart(2, "0");
 
-function updatePrice() {
-  const minutes = Number(duration.value);
-  const price = minutes / 60 * 500;
-  total.textContent = price.toLocaleString("ja-JP") + "円";
+      startTime.add(new Option(time, h * 60 + m));
+      endTime.add(new Option(time, h * 60 + m));
+    }
+  }
+
+  endTime.add(new Option("翌日 00:00", 1440));
+
+  startTime.value = "720";
+  endTime.value = "780";
 }
 
-duration.addEventListener("change", updatePrice);
+function updateSummary() {
+  const start = Number(startTime.value);
+  const end = Number(endTime.value);
 
-function preview() {
-  const selectedDate = date.value;
-  const name = document.getElementById("name").value.trim();
-  const email = document.getElementById("email").value.trim();
+  const minutes = end - start;
 
-  if (!selectedDate || !name || !email) {
-    alert("日付・お名前・メールアドレスを入力してください。");
+  const dateText = document.getElementById("selectedDate");
+  const timeText = document.getElementById("selectedTime");
+  const priceText = document.getElementById("totalPrice");
+
+  if (selectedDate) {
+    dateText.textContent = `利用日：${selectedDate}`;
+  } else {
+    dateText.textContent = "利用日を選択してください";
+  }
+
+  if (minutes <= 0) {
+    timeText.textContent = "終了時間を開始時間より後にしてください";
+    priceText.textContent = "－";
     return;
   }
 
-  const selected = new Date(selectedDate + "T" + start.value);
-  if (selected <= new Date()) {
+  const hours = minutes / 60;
+  const price = hours * 500;
+
+  timeText.textContent =
+    `利用時間：${hours}時間`;
+
+  priceText.textContent =
+    price.toLocaleString("ja-JP") + "円";
+}
+
+function confirmReservation() {
+  if (!selectedDate) {
+    alert("利用日を選択してください。");
+    return;
+  }
+
+  const start = Number(startTime.value);
+  const end = Number(endTime.value);
+
+  if (end <= start) {
+    alert("終了時間を開始時間より後にしてください。");
+    return;
+  }
+
+  const [y, m, d] = selectedDate.split("-").map(Number);
+  const selectedStart = new Date(y, m - 1, d);
+  selectedStart.setMinutes(start);
+
+  if (selectedStart <= new Date()) {
     alert("未来の日時を選択してください。");
     return;
   }
 
-  if (!document.getElementById("email").checkValidity()) {
-    alert("正しいメールアドレスを入力してください。");
-    return;
-  }
+  const price = (end - start) / 60 * 500;
 
   alert(
     "【予約内容の確認】\n\n" +
-    "ご利用日：" + selectedDate + "\n" +
-    "開始時間：" + start.value + "\n" +
-    "利用時間：" + Number(duration.value) / 60 + "時間\n" +
-    "料金：" + total.textContent + "\n\n" +
-    "※これは確認用です。予約はまだ確定しません。"
+    "利用日：" + selectedDate + "\n" +
+    "開始時間：" + startTime.selectedOptions[0].text + "\n" +
+    "終了時間：" + endTime.selectedOptions[0].text + "\n" +
+    "料金：" + price + "円\n\n" +
+    "※現在は試作版のため予約は確定しません。"
   );
 }
 
-updatePrice();
+startTime.addEventListener("change", updateSummary);
+endTime.addEventListener("change", updateSummary);
+
+createTimeOptions();
+renderCalendar();
+updateSummary();
 </script>
+
 </body>
 </html>
