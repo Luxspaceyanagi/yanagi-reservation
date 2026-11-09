@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>レンタルサロン yanagi｜予約カレンダー</title>
+
 <style>
 * { box-sizing: border-box; }
 
@@ -105,13 +106,12 @@ h2 {
 .day .symbol {
   display: block;
   margin-top: 5px;
-  color: #238bd0;
   font-size: 23px;
 }
 
-.day.disabled .symbol {
-  color: #aaa;
-}
+.available { color: #238bd0; }
+.partial { color: #e5a100; }
+.unavailable { color: #d9534f; }
 
 .section {
   margin-top: 35px;
@@ -121,10 +121,31 @@ h2 {
   font-size: 17px;
 }
 
-.time-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.slot {
+  padding: 12px 3px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.slot.selected {
+  background: #506b59;
+  color: white;
+}
+
+.slot:disabled {
+  background: #eee;
+  color: #aaa;
+  cursor: not-allowed;
 }
 
 select {
@@ -141,11 +162,6 @@ select {
   background: #f5f7f5;
   border-radius: 8px;
   line-height: 2;
-}
-
-.legend span {
-  color: #238bd0;
-  font-weight: bold;
 }
 
 .summary {
@@ -173,10 +189,21 @@ select {
   cursor: pointer;
 }
 
+.reserve-btn:disabled {
+  background: #aaa;
+  cursor: not-allowed;
+}
+
 .notice {
   font-size: 13px;
   color: #777;
   line-height: 1.7;
+}
+
+#syncStatus {
+  text-align: center;
+  font-size: 13px;
+  padding: 10px;
 }
 
 @media(max-width: 600px) {
@@ -189,13 +216,8 @@ select {
     min-height: 65px;
   }
 
-  .time-row {
-    gap: 5px;
-  }
-
-  select {
-    padding: 10px 3px;
-    font-size: 14px;
+  .slots {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 </style>
@@ -216,6 +238,8 @@ select {
   OPEN記念価格：1時間500円
 </p>
 
+<div id="syncStatus">空き状況を読み込み中...</div>
+
 <div class="month-nav">
   <button onclick="changeMonth(-1)">‹</button>
   <div id="monthTitle"></div>
@@ -224,219 +248,367 @@ select {
 
 <div class="calendar" id="calendar"></div>
 
+<div class="legend">
+  <strong>空き状況</strong><br>
+  <span class="available">○</span>：空きあり<br>
+  <span class="partial">△</span>：一部予約あり<br>
+  <span class="unavailable">×</span>：予約不可<br>
+  －：受付対象外
+</div>
+
+<div class="section">
+  <h3 id="dateTitle">利用日を選択してください</h3>
+  <p>開始時間を選択</p>
+  <div id="slots" class="slots"></div>
+</div>
+
 <div class="section">
   <h3>利用時間を選ぶ</h3>
-
-  <div class="time-row">
-    <select id="startTime"></select>
-    <span>→</span>
-    <select id="endTime"></select>
-  </div>
+  <select id="duration" onchange="updateSelection()"></select>
 
   <p class="notice">
     ※30分単位でご利用いただけます。
   </p>
 </div>
 
-<div class="legend">
-  <strong>空き状況</strong><br>
-  <span>○</span>：選択可能<br>
-  <span>－</span>：選択不可
-  <p class="notice">
-    ※現在は試作版です。実際の予約状況は反映されていません。
-  </p>
-</div>
-
 <div class="summary">
-  <div id="selectedDate">利用日を選択してください</div>
-  <div id="selectedTime"></div>
-  <div class="price" id="totalPrice">500円</div>
+  <div id="selectedDate">利用日：未選択</div>
+  <div id="selectedTime">開始時間：未選択</div>
+  <div id="selectedDuration">利用時間：未選択</div>
+  <div class="price" id="totalPrice">－</div>
 </div>
 
-<button class="reserve-btn" onclick="confirmReservation()">
-  予約内容を確認する
+<button class="reserve-btn" disabled>
+  予約機能は準備中です
 </button>
 
 <p class="notice">
-  ※現在は試作段階です。予約確定・決済はできません。
+  ※現在は空き状況確認用の試作版です。<br>
+  ※予約確定・オンライン決済はまだできません。<br>
+  ※日付をまたぐ予約には今後対応予定です。
 </p>
 
 </main>
 
 <script>
-const calendar = document.getElementById("calendar");
-const monthTitle = document.getElementById("monthTitle");
-const startTime = document.getElementById("startTime");
-const endTime = document.getElementById("endTime");
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbxVJDFXoq_dOEbScMAXB4u2WOeo6hgj6gC0intPOoictVHHzEaKLjMvkQMP6n7XyWsP/exec";
 
-let currentDate = new Date();
-currentDate.setDate(1);
+const calendar = document.getElementById("calendar");
+const slots = document.getElementById("slots");
+const duration = document.getElementById("duration");
+const statusEl = document.getElementById("syncStatus");
+
+let bookings = [];
+let loaded = false;
+
+let currentMonth = new Date();
+currentMonth.setDate(1);
 
 let selectedDate = null;
+let selectedStart = null;
 
-function formatDate(date) {
+function dateKey(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
+function timeText(minutes) {
+  return String(Math.floor(minutes / 60)).padStart(2, "0") +
+    ":" + String(minutes % 60).padStart(2, "0");
+}
+
+function getDateTime(date, minutes) {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, minutes);
+}
+
+function isAvailable(date, start, end) {
+  if (!loaded || end > 1440 || end <= start) {
+    return false;
+  }
+
+  const from = getDateTime(date, start);
+  const to = getDateTime(date, end);
+
+  if (from <= new Date()) return false;
+
+  const limit = new Date();
+  limit.setDate(limit.getDate() + 90);
+
+  if (to > limit) return false;
+
+  return !bookings.some(b =>
+    from < b.end && to > b.start
+  );
+}
+
+function dayStatus(date) {
+  if (!loaded) return "－";
+
+  let free = 0;
+  let blocked = 0;
+
+  for (let t = 0; t < 1440; t += 30) {
+    if (isAvailable(date, t, t + 30)) {
+      free++;
+    } else {
+      blocked++;
+    }
+  }
+
+  if (free === 0) return "×";
+  if (blocked > 0) return "△";
+  return "○";
+}
+
 function renderCalendar() {
   calendar.innerHTML = "";
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
 
-  monthTitle.textContent = `${year}年${month + 1}月`;
+  document.getElementById("monthTitle").textContent =
+    `${year}年${month + 1}月`;
 
-  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-
-  weekdays.forEach(day => {
-    const div = document.createElement("div");
-    div.className = "weekday";
-    div.textContent = day;
-    calendar.appendChild(div);
+  ["日", "月", "火", "水", "木", "金", "土"].forEach(w => {
+    const el = document.createElement("div");
+    el.className = "weekday";
+    el.textContent = w;
+    calendar.appendChild(el);
   });
 
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const first = new Date(year, month, 1).getDay();
+  const days = new Date(year, month + 1, 0).getDate();
 
-  for (let i = 0; i < firstDay; i++) {
+  for (let i = 0; i < first; i++) {
     calendar.appendChild(document.createElement("div"));
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month, day);
-    const dateString = formatDate(date);
+  for (let d = 1; d <= days; d++) {
+    const date = dateKey(new Date(year, month, d));
+    const symbol = dayStatus(date);
 
     const button = document.createElement("button");
     button.className = "day";
 
-    const disabled = date < today;
-
-    if (disabled) {
-      button.classList.add("disabled");
-      button.disabled = true;
-    }
-
-    if (selectedDate === dateString) {
+    if (date === selectedDate) {
       button.classList.add("selected");
     }
 
-    button.innerHTML = `
-      ${day}
-      <span class="symbol">${disabled ? "－" : "○"}</span>
-    `;
+    const number = document.createElement("div");
+    number.textContent = d;
 
-    button.onclick = () => {
-      selectedDate = dateString;
-      renderCalendar();
-      updateSummary();
-    };
+    const mark = document.createElement("span");
+    mark.className = "symbol";
+    mark.textContent = symbol;
+
+    if (symbol === "○") mark.classList.add("available");
+    if (symbol === "△") mark.classList.add("partial");
+    if (symbol === "×") mark.classList.add("unavailable");
+
+    button.appendChild(number);
+    button.appendChild(mark);
+
+    if (symbol === "×" || symbol === "－") {
+      button.disabled = true;
+      button.classList.add("disabled");
+    } else {
+      button.onclick = () => selectDate(date);
+    }
 
     calendar.appendChild(button);
   }
 }
 
 function changeMonth(amount) {
-  currentDate.setMonth(currentDate.getMonth() + amount);
+  currentMonth.setMonth(currentMonth.getMonth() + amount);
+
+  selectedDate = null;
+  selectedStart = null;
+
+  document.getElementById("dateTitle").textContent =
+    "利用日を選択してください";
+
   renderCalendar();
+  renderSlots();
+  updateSummary();
 }
 
-function createTimeOptions() {
-  for (let h = 0; h < 24; h++) {
-    for (let m of [0, 30]) {
-      const time =
-        String(h).padStart(2, "0") + ":" +
-        String(m).padStart(2, "0");
+function selectDate(date) {
+  selectedDate = date;
+  selectedStart = null;
 
-      startTime.add(new Option(time, h * 60 + m));
-      endTime.add(new Option(time, h * 60 + m));
+  document.getElementById("dateTitle").textContent =
+    date + " の空き状況";
+
+  renderCalendar();
+  renderSlots();
+  updateSummary();
+}
+
+function renderSlots() {
+  slots.innerHTML = "";
+
+  if (!selectedDate) {
+    slots.textContent =
+      "カレンダーから利用日を選択してください。";
+    return;
+  }
+
+  const minutes = Number(duration.value);
+
+  for (let t = 0; t < 1440; t += 30) {
+    const button = document.createElement("button");
+    button.className = "slot";
+
+    const available =
+      isAvailable(selectedDate, t, t + minutes);
+
+    button.textContent =
+      timeText(t) + (available ? " ○" : " ×");
+
+    if (!available) {
+      button.disabled = true;
+    } else {
+      button.onclick = () => {
+        selectedStart = t;
+        renderSlots();
+        updateSummary();
+      };
+    }
+
+    if (selectedStart === t && available) {
+      button.classList.add("selected");
+    }
+
+    slots.appendChild(button);
+  }
+}
+
+function updateSelection() {
+  if (selectedDate && selectedStart !== null) {
+    const minutes = Number(duration.value);
+
+    if (!isAvailable(
+      selectedDate,
+      selectedStart,
+      selectedStart + minutes
+    )) {
+      selectedStart = null;
     }
   }
 
-  endTime.add(new Option("翌日 00:00", 1440));
-
-  startTime.value = "720";
-  endTime.value = "780";
+  renderSlots();
+  updateSummary();
 }
 
 function updateSummary() {
-  const start = Number(startTime.value);
-  const end = Number(endTime.value);
+  document.getElementById("selectedDate").textContent =
+    "利用日：" + (selectedDate || "未選択");
 
-  const minutes = end - start;
+  const timeEl = document.getElementById("selectedTime");
+  const durationEl = document.getElementById("selectedDuration");
+  const priceEl = document.getElementById("totalPrice");
 
-  const dateText = document.getElementById("selectedDate");
-  const timeText = document.getElementById("selectedTime");
-  const priceText = document.getElementById("totalPrice");
-
-  if (selectedDate) {
-    dateText.textContent = `利用日：${selectedDate}`;
-  } else {
-    dateText.textContent = "利用日を選択してください";
-  }
-
-  if (minutes <= 0) {
-    timeText.textContent = "終了時間を開始時間より後にしてください";
-    priceText.textContent = "－";
+  if (selectedStart === null) {
+    timeEl.textContent = "開始時間：未選択";
+    durationEl.textContent = "利用時間：未選択";
+    priceEl.textContent = "－";
     return;
   }
 
-  const hours = minutes / 60;
-  const price = hours * 500;
+  const minutes = Number(duration.value);
+  const end = selectedStart + minutes;
 
-  timeText.textContent =
-    `利用時間：${hours}時間`;
+  timeEl.textContent =
+    "利用時間帯：" +
+    timeText(selectedStart) + "〜" +
+    (end === 1440 ? "24:00" : timeText(end));
 
-  priceText.textContent =
-    price.toLocaleString("ja-JP") + "円";
+  durationEl.textContent =
+    "利用時間：" + minutes / 60 + "時間";
+
+  priceEl.textContent =
+    (minutes / 60 * 500).toLocaleString("ja-JP") + "円";
 }
 
-function confirmReservation() {
-  if (!selectedDate) {
-    alert("利用日を選択してください。");
-    return;
+function yanagiReceiveBookings(data) {
+  try {
+    if (!data || !Array.isArray(data.reservations)) {
+      throw new Error("データ形式が不正です");
+    }
+
+    bookings = data.reservations.map(b => ({
+      start: new Date(b.start),
+      end: new Date(b.end)
+    }));
+
+    if (bookings.some(b =>
+      !Number.isFinite(b.start.getTime()) ||
+      !Number.isFinite(b.end.getTime()) ||
+      b.end <= b.start
+    )) {
+      throw new Error("日時データが不正です");
+    }
+
+    loaded = true;
+
+    statusEl.textContent =
+      "Googleカレンダーの空き状況を取得しました";
+
+    renderCalendar();
+    renderSlots();
+    updateSummary();
+
+  } catch (error) {
+    syncError();
   }
-
-  const start = Number(startTime.value);
-  const end = Number(endTime.value);
-
-  if (end <= start) {
-    alert("終了時間を開始時間より後にしてください。");
-    return;
-  }
-
-  const [y, m, d] = selectedDate.split("-").map(Number);
-  const selectedStart = new Date(y, m - 1, d);
-  selectedStart.setMinutes(start);
-
-  if (selectedStart <= new Date()) {
-    alert("未来の日時を選択してください。");
-    return;
-  }
-
-  const price = (end - start) / 60 * 500;
-
-  alert(
-    "【予約内容の確認】\n\n" +
-    "利用日：" + selectedDate + "\n" +
-    "開始時間：" + startTime.selectedOptions[0].text + "\n" +
-    "終了時間：" + endTime.selectedOptions[0].text + "\n" +
-    "料金：" + price + "円\n\n" +
-    "※現在は試作版のため予約は確定しません。"
-  );
 }
 
-startTime.addEventListener("change", updateSummary);
-endTime.addEventListener("change", updateSummary);
+function syncError() {
+  loaded = false;
+  bookings = [];
+  selectedDate = null;
+  selectedStart = null;
 
-createTimeOptions();
+  statusEl.textContent =
+    "空き状況を取得できませんでした。再読み込みしてください。";
+
+  renderCalendar();
+  renderSlots();
+  updateSummary();
+}
+
+function loadBookings() {
+  loaded = false;
+  statusEl.textContent = "空き状況を読み込み中...";
+
+  const script = document.createElement("script");
+
+  script.src =
+    API_URL + "?callback=yanagiReceiveBookings&t=" +
+    Date.now();
+
+  script.onerror = syncError;
+
+  document.body.appendChild(script);
+}
+
+for (let i = 1; i <= 48; i++) {
+  const minutes = i * 30;
+  duration.add(new Option(minutes / 60 + "時間", minutes));
+}
+
+duration.value = "60";
+
 renderCalendar();
+renderSlots();
 updateSummary();
+loadBookings();
+
 </script>
 
 </body>
